@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ManageBeds Architecture & Data Flow</title>
+
+<!-- Libraries for Markdown parsing & Highlighting -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --bg-primary: #030712;
+    --bg-secondary: rgba(17, 24, 39, 0.7);
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --accent-glow: #3b82f6;
+    --accent-glow-alt: #8b5cf6;
+    --border-color: rgba(255, 255, 255, 0.08);
+    --sidebar-width: 320px;
+  }
+  
+  * { 
+    box-sizing: border-box; 
+  }
+  
+  body {
+    margin: 0; 
+    font-family: 'Inter', sans-serif;
+    color: var(--text-primary);
+    display: flex; 
+    height: 100vh; 
+    overflow: hidden;
+    background: radial-gradient(circle at top left, #1e1b4b, #030712 50%),
+                radial-gradient(circle at bottom right, #0f172a, #030712 50%);
+    background-size: cover;
+    background-position: center;
+  }
+
+  /* Animated glowing orb behind sidebar */
+  body::before {
+    content: '';
+    position: absolute;
+    top: -150px;
+    left: -150px;
+    width: 400px;
+    height: 400px;
+    background: var(--accent-glow-alt);
+    border-radius: 50%;
+    filter: blur(150px);
+    opacity: 0.15;
+    z-index: 0;
+    animation: float 10s ease-in-out infinite alternate;
+  }
+
+  @keyframes float {
+    from { transform: translate(0, 0); }
+    to { transform: translate(50px, 50px); }
+  }
+
+  /* Sidebar Styles (Glassmorphism) */
+  #sidebar {
+    width: var(--sidebar-width); 
+    background: var(--bg-secondary);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-right: 1px solid var(--border-color);
+    display: flex; 
+    flex-direction: column;
+    overflow-y: auto; 
+    padding: 40px 0;
+    z-index: 10;
+  }
+  
+  .nav-header { 
+    padding: 0 35px 25px; 
+    font-family: 'Outfit', sans-serif;
+    font-weight: 800; 
+    font-size: 1.6rem; 
+    background: linear-gradient(135deg, #60a5fa, #c084fc);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    border-bottom: 1px solid var(--border-color); 
+    margin-bottom: 20px; 
+    letter-spacing: 0.5px;
+  }
+  
+  .nav-item { 
+    margin: 5px 20px;
+    padding: 12px 20px; 
+    cursor: pointer; 
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+    color: var(--text-secondary); 
+    text-decoration: none; 
+    display: block; 
+    font-size: 0.95rem;
+    border-radius: 10px;
+    border: 1px solid transparent;
+  }
+  
+  .nav-item:hover { 
+    background-color: rgba(255, 255, 255, 0.03); 
+    color: var(--text-primary); 
+    transform: translateX(4px);
+  }
+  
+  .nav-item.active { 
+    background: linear-gradient(90deg, rgba(59, 130, 246, 0.15), transparent);
+    color: #60a5fa; 
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    font-weight: 500;
+  }
+
+  /* Main Content Styles */
+  #content {
+    flex: 1; 
+    padding: 60px; 
+    overflow-y: auto; 
+    scroll-behavior: smooth;
+    position: relative;
+    z-index: 10;
+  }
+  
+  .container { 
+    max-width: 950px; 
+    margin: 0 auto; 
+  }
+
+  h1, h2, h3, h4 { 
+    font-family: 'Outfit', sans-serif; 
+    color: var(--text-primary); 
+  }
+  
+  h1 { 
+    font-size: 3.5rem; 
+    margin-bottom: 10px; 
+    font-weight: 800; 
+    letter-spacing: -1px;
+    background: linear-gradient(to right, #f8fafc, #94a3b8);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  
+  h2 { 
+    font-size: 2rem; 
+    margin-top: 80px; 
+    padding-bottom: 15px; 
+    color: #60a5fa; 
+    border-bottom: 1px solid var(--border-color);
+  }
+  
+  h3 { font-size: 1.4rem; margin-top: 40px; color: #a78bfa; }
+  
+  /* Blocks & Formatting */
+  pre { 
+    background: rgba(0, 0, 0, 0.4); 
+    backdrop-filter: blur(10px);
+    padding: 25px; 
+    border-radius: 16px; 
+    overflow-x: auto; 
+    border: 1px solid var(--border-color); 
+    box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5);
+  }
+  code { font-family: 'Consolas', 'Monaco', monospace; font-size: 0.9rem; }
+  p > code, li > code { 
+    background: rgba(59, 130, 246, 0.15); 
+    padding: 4px 8px; 
+    border-radius: 6px; 
+    font-size: 0.85em; 
+    color: #93c5fd; 
+    border: 1px solid rgba(59, 130, 246, 0.2);
+  }
+  
+  table { 
+    width: 100%; 
+    border-collapse: collapse; 
+    margin-top: 30px; 
+    border-radius: 12px; 
+    overflow: hidden; 
+    box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5);
+    background: rgba(30, 41, 59, 0.4);
+    border: 1px solid var(--border-color);
+  }
+  th, td { padding: 18px; text-align: left; border-bottom: 1px solid var(--border-color); }
+  th { background-color: rgba(0, 0, 0, 0.4); color: #e2e8f0; font-family: 'Outfit'; font-weight: 600; text-transform: uppercase; font-size: 0.85rem; letter-spacing: 1px;}
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background-color: rgba(255, 255, 255, 0.02); }
+  
+  a { color: #60a5fa; text-decoration: none; transition: color 0.2s; }
+  a:hover { color: #93c5fd; text-shadow: 0 0 8px rgba(96, 165, 250, 0.4); }
+  
+  blockquote { 
+    border-left: 4px solid #8b5cf6; 
+    margin: 30px 0; 
+    padding: 20px 25px; 
+    background: linear-gradient(to right, rgba(139, 92, 246, 0.1), transparent);
+    border-radius: 0 12px 12px 0; 
+    color: #e2e8f0; 
+    font-size: 1.05rem;
+    line-height: 1.6;
+  }
+  
+  /* Animations */
+  .fade-in { animation: smoothUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; transform: translateY(30px); }
+  @keyframes smoothUp { 
+    to { opacity: 1; transform: translateY(0); } 
+  }
+  
+  /* Modern Scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.3); border-radius: 10px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.6); }
+
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <div class="nav-header">ManageBeds</div>
+  <div id="nav-links"></div>
+</div>
+
+<div id="content">
+  <div class="container fade-in" id="markdown-container">
+    <!-- Rendered content injected here -->
+  </div>
+</div>
+
+<script>
+// Use multiline string directly encompassing the provided complete MD file
+const documentContent = `
+# ManageBeds — Architecture & Data Flow
+
+> Hospital bed management module built with **Next.js**, **AWS Amplify Gen 2** (DynamoDB via \`client.models\`),
+> **TanStack Table**, **shadcn/ui**, and **Sonner** toasts.
+
+---
+
+## 1. Project File Tree
+
+\`\`\`text
+ManageBeds/
+├── ManageBedList.tsx                    ← Root "page" component (orchestrator)
+│
+├── hooks/
+│   ├── useBeds.ts                       ← Fetches all beds from Amplify
+│   ├── useBedFilter.tsx                 ← Search + filter logic (pure derived state)
+│   └── useBedActions.tsx                ← All write actions + dialog state
+│
+└── components/
+    ├── bedStatus.tsx                    ← Pure display: OCCUPIED / AVAILABLE badge
+    │
+    ├── forms/
+    │   └── AddBedDialog.tsx             ← Self-contained "New Bed" form + dialog
+    │
+    ├── Filters/
+    │   └── bedFilterdropdown.tsx        ← Status + RoomType filter dropdown
+    │
+    ├── tables/
+    │   ├── bedTable.tsx                 ← TanStack Table shell + pagination
+    │   └── coloumn.tsx                  ← Column definitions (reads meta callbacks)
+    │
+    └── dialogs/
+        ├── allocateBedDialogs.tsx       ← Fetch available patients → assign to bed
+        ├── DischargeDialog.tsx          ← Discharge form (medical + payment)
+        └── patientDetailDialog.tsx      ← Read-only patient profile viewer
+\`\`\`
+
+---
+
+## 2. Component Hierarchy
+
+\`\`\`text
+ManageBedList  (root, "use client")
+│
+│  reads:  useBeds()        → beds[], loading, fetchBeds()
+│  reads:  useBedFilters()  → query, setQuery, filters, setFilters, filteredBeds[]
+│  reads:  useBedActions()  → all dialog state + action handlers
+│
+├── <AddBedDialog onBedAdded={fetchBeds} />
+│       self-managed local form state
+│       writes: client.models.Bed.create(...)
+│
+├── <Input />  (search bar)
+│       value={query}   onChange → setQuery()
+│
+├── <BedFilterDropdown filters={filters} onChange={setFilters} />
+│
+├── <BedTable beds={filteredBeds} onAllocate={openAllocate} onDischarge={openDischarge} ... />
+│   └── <columns /> (via TanStack meta)
+│       ├── Room, Bed, Type, Status columns
+│       ├── Patient column → clickable name → meta.onViewPatient(bed.patient.id)
+│       └── Actions column (Allocate, Discharge, Delete)
+│
+├── <AllocateBedDialog bedId={allocateBedId} onSuccess={fetchBeds} onClose={closeAllocate} />
+├── <DischargeDialog bed={dischargeBed} form={dischargeForm} onUpdate={updateDischargeForm} />
+└── <PatientDetailDialog patientId={viewPatientId} onClose={closeViewPatient} />
+\`\`\`
+
+---
+
+## 3. Hook Responsibilities
+
+### 3.1 \`useBeds.ts\`
+\`\`\`typescript
+useBeds()
+│
+│  State: beds[], loading
+│  fetchBeds()
+│  └── client.models.Bed.list({ selectionSet: [...] })
+│  Returns: { beds, loading, fetchBeds }
+\`\`\`
+
+### 3.2 \`useBedFilter.tsx\`
+\`\`\`typescript
+useBedFilters(beds)
+│
+│  State: query, filters
+│  filteredBeds = useMemo(() => beds.filter(...), [beds, query, filters])
+│  Returns: { query, setQuery, filters, setFilters, filteredBeds }
+\`\`\`
+
+### 3.3 \`useBedActions.tsx\`
+Manage global states for dialog orchestration.
+\`\`\`typescript
+useBedActions(onRefresh)
+│
+│  State: allocateBedId, dischargeBed, dischargeForm, viewPatientId, deletingId
+│  Handlers: openAllocate, openDischarge, handleDischarge, handleDeleteBed
+\`\`\`
+
+---
+
+## 4. Data Flow Examples
+
+### 4.1 — "Allocate" Button Flow
+\`\`\`text
+USER clicks <UserPlus> icon -> meta?.onAllocate(bed.id)
+-> openAllocate() -> setAllocateBedId()
+-> <AllocateBedDialog open> fetches patients
+-> USER selects patient and confirms
+-> client.models.Bed.update({ isOccupied: true, assignedPatientId, admittedAt })
+-> onSuccess() -> fetchBeds()
+\`\`\`
+
+### 4.2 — "Discharge" Button Flow
+\`\`\`text
+USER clicks <UserMinus> -> meta?.onDischarge(bed)
+-> openDischarge() -> setDischargeBed(bed)
+-> <DischargeDialog open={!!bed}>
+-> USER fills form -> handleDischarge() 
+-> client.models.Bed.update({ isOccupied: false, assignedPatientId: null, dischargedAt })
+-> fetchBeds()
+\`\`\`
+
+### 4.3 — View Patient & Delete Bed
+- **View Patient:** Click name -> \`meta.onViewPatient()\` -> Dialog component uses \`Patient.get({ id })\` to render read-only profile.
+- **Delete Bed:** Click Trash -> \`handleDeleteBed()\` validates \`!isOccupied\` -> \`Bed.delete({ id })\` -> \`fetchBeds()\`.
+
+---
+
+## 5. Props Map — Every Prop Explained
+
+### \`BedTable\` Props
+| Prop | Type | Usage inside component |
+|------|------|------------------------|
+| \`beds\` | \`Bed[]\` | \`useReactTable({ data: beds })\` |
+| \`onAllocate\` | \`function\` | Passed into \`table.options.meta.onAllocate\` |
+| \`onDischarge\` | \`function\` | Passed into \`table.options.meta.onDischarge\` |
+| \`onViewPatient\`| \`function\` | Passed into \`table.options.meta.onViewPatient\` |
+| \`onDelete\` | \`function\` | Passed into \`table.options.meta.onDelete\` |
+| \`deletingId\` | \`string \\| null\` | Passed into \`table.options.meta.deletingId\` |
+
+### Dialog Props (Null-As-Gate Pattern)
+All dialogs share the \`null\`-as-gate idiom: \`null\` = closed, value = open.
+| Dialog Component | Prop Name | Render Guard Condition |
+|------------------|-----------|------------------------|
+| \`AllocateBedDialog\` | \`bedId\` | \`open={!!bedId}\` |
+| \`DischargeDialog\` | \`bed\` | \`open={!!bed}\` |
+| \`PatientDetailDialog\` | \`patientId\` | \`open={!!patientId}\` |
+
+---
+
+## 6. AWS Amplify Write Operations Summary
+
+| Action | Model | Operation | Fields Written |
+|--------|-------|-----------|----------------|
+| Add Bed | \`Bed\` | \`.create()\` | roomNumber, bedNumber, roomType, isOccupied=false |
+| Allocate | \`Bed\` | \`.update()\` | isOccupied=true, assignedPatientId, admittedAt |
+| Discharge | \`Bed\` | \`.update()\` | isOccupied=false, assignedPatientId=null, dischargedAt |
+| Delete | \`Bed\` | \`.delete()\` | id |
+
+*Data optimized using explicit \`selectionSet\` targeting on reads to prevent over-fetching.*
+
+---
+
+## 7. State Ownership Summary
+- **ManageBedList**: Coordinator — owns **no local state directly**.
+- **useBeds / useBedFilters / useBedActions**: Owns server state, UI derived state, and interaction state.
+- **AddBedDialog / AllocateBedDialog**: Contains fully self-contained local state for form inputs and selections.
+`;
+
+// Render logic using Marked.js
+document.getElementById('markdown-container').innerHTML = marked.parse(documentContent);
+
+// Add syntax highlighting to code blocks
+document.querySelectorAll('pre code').forEach((block) => {
+  hljs.highlightElement(block);
+});
+
+// Setup dynamic Sidebar Navigation
+const navLinks = document.getElementById('nav-links');
+const sections = document.querySelectorAll('#markdown-container h2');
+
+sections.forEach((header, index) => {
+  const idStr = 'section-' + index;
+  header.id = idStr;
+
+  const anchor = document.createElement('a');
+  anchor.href = '#' + idStr;
+  anchor.className = 'nav-item';
+  // Strip starting text like "1. ", "5. " to make it elegant
+  anchor.textContent = header.innerText.replace(/^[0-9.]+\s*/, '');
+  
+  anchor.addEventListener('click', (e) => {
+    e.preventDefault();
+    document.getElementById(idStr).scrollIntoView({ behavior: 'smooth' });
+  });
+
+  navLinks.appendChild(anchor);
+});
+
+// Highlight Active Nav Link on Scroll
+const contentDiv = document.getElementById('content');
+const allNavLinks = document.querySelectorAll('.nav-item');
+
+contentDiv.addEventListener('scroll', () => {
+  let currentSelectionId = null;
+  sections.forEach(header => {
+    const rect = header.getBoundingClientRect();
+    // Offset tolerance for when header is visible in top segment
+    if (rect.top >= 0 && rect.top <= 150) {
+      currentSelectionId = header.id;
+    }
+  });
+  
+  if (currentSelectionId) {
+    allNavLinks.forEach(link => {
+      link.classList.toggle('active', link.getAttribute('href') === '#' + currentSelectionId);
+    });
+  }
+});
+</script>
+</body>
+</html>
